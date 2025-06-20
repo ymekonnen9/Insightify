@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Insightify App: The complete serverless application stack with a dedicated Lambda for CORS preflight requests.
+
+Globals:
+  Function:
+    Timeout: 30 
+    MemorySize: 128
+
+Resources:
+  AnalysisApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      # ALL global CORS configuration is removed. We are handling it manually.
+      Domain:
+        DomainName: insightify.yaredmekonnendomain.click
+        CertificateArn: arn:aws:acm:us-east-1:832753618852:certificate/be8c446d-4f36-4847-91f7-3471fb8bae79
+        EndpointConfiguration: REGIONAL
+        Route53:
+          HostedZoneId: Z02492692BM7HFE9JW03Y
+
+  #==================================================================
+  # 1. DEDICATED CORS HANDLER LAMBDA
+  #    This function now defines its own events to handle all preflight checks.
+  #==================================================================
+  CorsHandlerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: Insightify.CorsHandler::Insightify.CorsHandler.Function::FunctionHandler
+      Runtime: dotnet8
+      CodeUri: Insightify.CorsHandler/
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Events:
+        SubmitOptionsEvent:
+          Type: Api
+          Properties:
+            Path: /analysis
+            Method: options
+            RestApiId: !Ref AnalysisApi
+        GetStatusOptionsEvent:
+          Type: Api
+          Properties:
+            Path: /analysis/{jobId}
+            Method: options
+            RestApiId: !Ref AnalysisApi
+
+  #==================================================================
+  # 2. SUBMIT LAMBDA
+  #    This function now ONLY handles the POST request.
+  #==================================================================
+  SubmitLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: Insightify.Submit::Insightify.Submit.Function::FunctionHandler
+      Runtime: dotnet8
+      CodeUri: Insightify.Submit/
+      Environment:
+        Variables:
+          ANALYSIS_TABLE_NAME: !Ref AnalysisTable
+          ANALYSIS_QUEUE_URL: !Ref AnalysisQueue
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy: { TableName: !Ref AnalysisTable }
+        - SQSSendMessagePolicy: { QueueName: !GetAtt AnalysisQueue.QueueName }
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            Path: /analysis
+            Method: post
+            RestApiId: !Ref AnalysisApi
+
+  #==================================================================
+  # 3. GET STATUS LAMBDA
+  #    This function now ONLY handles the GET request.
+  #==================================================================
+  GetStatusLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: Insightify.GetStatus::Insightify.GetStatus.Function::FunctionHandler
+      Runtime: dotnet8
+      CodeUri: Insightify.GetStatus/
+      Environment: { Variables: { ANALYSIS_TABLE_NAME: !Ref AnalysisTable } }
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBReadPolicy: { TableName: !Ref AnalysisTable }
+      Events:
+        GetEvent:
+          Type: Api
+          Properties:
+            Path: /analysis/{jobId}
+            Method: get
+            RestApiId: !Ref AnalysisApi
+  
+  #==================================================================
+  # 4. OTHER RESOURCES (Unchanged)
+  #==================================================================
+  AnalysisQueue:
+    Type: AWS::SQS::Queue
+
+  AnalysisTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: JobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: JobId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ProcessLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: Insightify.Process::Insightify.Process.Function::FunctionHandler
+      Runtime: dotnet8
+      CodeUri: Insightify.Process/
+      MemorySize: 256
+      Environment: { Variables: { ANALYSIS_TABLE_NAME: !Ref AnalysisTable } }
+      Events:
+        SQSEvent: { Type: SQS, Properties: { Queue: !GetAtt AnalysisQueue.Arn, BatchSize: 5 } }
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - SQSPollerPolicy: { QueueName: !GetAtt AnalysisQueue.QueueName }
+        - DynamoDBCrudPolicy: { TableName: !Ref AnalysisTable }
+        - ComprehendBasicAccessPolicy: {}

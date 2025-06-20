@@ -1,0 +1,205 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insightify - AI Content Analysis</title>
+    <!-- We'll use the Tailwind CSS library for fast, modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* A simple animation for the loading spinner */
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, .1);
+            border-left-color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen font-sans">
+    <div class="w-full max-w-2xl bg-white rounded-lg shadow-xl p-8 space-y-6">
+
+        <!-- Header -->
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Insightify</h1>
+            <p class="text-gray-600 mt-1">Enter any text below to analyze its sentiment and key entities.</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="space-y-4">
+            <label for="text-input" class="block text-sm font-medium text-gray-700">Your Text</label>
+            <textarea id="text-input" rows="6" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="e.g., 'AWS is an amazing cloud platform. I love using Lambda and S3.'"></textarea>
+            <button id="submit-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:bg-indigo-300">
+                Analyze Text
+            </button>
+        </div>
+
+        <!-- Results Display Area -->
+        <div id="results-area" class="hidden">
+            <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Analysis Results</h2>
+            <div id="status-display" class="mt-4 p-4 bg-gray-50 rounded-md">
+                <!-- Status and dynamic content will be injected here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Error Display Area -->
+        <div id="error-area" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-md">
+            <!-- Error messages will be shown here -->
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // This is the URL for your API. It's built from your custom domain and the stage name from template.yaml.
+        const API_ENDPOINT = 'https://insightify.yaredmekonnendomain.click/analysis';
+
+        // --- DOM ELEMENT REFERENCES ---
+        const textInput = document.getElementById('text-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const resultsArea = document.getElementById('results-area');
+        const statusDisplay = document.getElementById('status-display');
+        const errorArea = document.getElementById('error-area');
+
+        let pollingInterval; // To hold our interval timer
+
+        // --- EVENT LISTENER ---
+        submitBtn.addEventListener('click', handleSubmit);
+
+        // --- FUNCTIONS ---
+
+        /**
+         * Handles the click event of the "Analyze Text" button.
+         */
+        async function handleSubmit() {
+            const textToAnalyze = textInput.value;
+            if (!textToAnalyze.trim()) {
+                showError('Please enter some text to analyze.');
+                return;
+            }
+
+            // Disable button and show loading state
+            resetUI();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            resultsArea.classList.remove('hidden');
+            statusDisplay.innerHTML = `<div class="flex items-center"><div class="spinner w-5 h-5 rounded-full mr-3"></div>Submitting your request...</div>`;
+
+            try {
+                // Make the POST request to submit the job
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ TextToAnalyze: textToAnalyze })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // If the API returns an error (like 400 or 500)
+                    throw new Error(data.message || `API returned status ${response.status}`);
+                }
+
+                // If submission is successful, start polling for results
+                const jobId = data.JobId;
+                statusDisplay.innerHTML = `<p class="text-gray-700">Request accepted! Job ID: <span class="font-mono bg-gray-200 px-1 rounded">${jobId}</span></p><div class="flex items-center mt-2"><div class="spinner w-5 h-5 rounded-full mr-3"></div>Waiting for analysis to complete...</div>`;
+                startPolling(jobId);
+
+            } catch (error) {
+                showError(`Submission failed: ${error.message}`);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Analyze Text';
+            }
+        }
+
+        /**
+         * Starts checking the job status every 3 seconds.
+         * @param {string} jobId - The ID of the job to poll.
+         */
+        function startPolling(jobId) {
+            pollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_ENDPOINT}/${jobId}`);
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+
+                    // Check if the job is completed
+                    if (data.Status === 'COMPLETED') {
+                        clearInterval(pollingInterval); // Stop polling
+                        displayResults(data);
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Analyze Text';
+                    }
+                } catch (error) {
+                    showError(`Failed to get job status: ${error.message}`);
+                    clearInterval(pollingInterval); // Stop on error
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Analyze Text';
+                }
+            }, 3000); // Poll every 3 seconds (3000 milliseconds)
+        }
+
+        /**
+         * Renders the final results in the UI.
+         * @param {object} data - The full result object from DynamoDB.
+         */
+        function displayResults(data) {
+            // Determine sentiment color
+            const sentimentColor =
+                data.Sentiment === 'POSITIVE' ? 'text-green-700 bg-green-100' :
+                data.Sentiment === 'NEGATIVE' ? 'text-red-700 bg-red-100' :
+                'text-gray-700 bg-gray-100';
+
+            // Build the HTML for the results
+            statusDisplay.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Overall Sentiment</p>
+                        <p class="text-lg font-bold px-2 py-1 rounded-md inline-block ${sentimentColor}">${data.Sentiment}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Key Entities Found</p>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            ${data.KeyEntities.length > 0 ? data.KeyEntities.map(entity => `<span class="bg-blue-100 text-blue-800 text-sm font-mono px-2 py-1 rounded">${entity}</span>`).join('') : '<p class="text-gray-500">None</p>'}
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Sentiment Score</p>
+                        <div class="text-sm text-gray-800 font-mono space-y-1 mt-1">
+                           <p>Positive: ${(data.PositiveScore * 100).toFixed(2)}%</p>
+                           <p>Negative: ${(data.NegativeScore * 100).toFixed(2)}%</p>
+                           <p>Neutral: ${(data.NeutralScore * 100).toFixed(2)}%</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Displays an error message in the UI.
+         * @param {string} message - The error message to show.
+         */
+        function showError(message) {
+            errorArea.classList.remove('hidden');
+            errorArea.textContent = message;
+        }
+
+        /**
+         * Hides the error and results area for a new submission.
+         */
+        function resetUI() {
+            errorArea.classList.add('hidden');
+            resultsArea.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
