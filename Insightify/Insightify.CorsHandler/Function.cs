@@ -22,7 +22,7 @@ public class Function
             {
                 { "Access-Control-Allow-Headers", "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token" },
                 { "Access-Control-Allow-Methods", "POST,GET,OPTIONS" },
-                { "Access-Control-Allow-Origin", "*" }
+                { "Access-Control-Allow-Origin", "https://insightify.yaredmekonnendomain.click" }
             }
         };
     }

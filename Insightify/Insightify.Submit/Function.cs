@@ -43,7 +43,7 @@ public class Function
             {
                 StatusCode = (int)HttpStatusCode.OK,
                 Headers = new Dictionary<string, string> {
-                    { "Access-Control-Allow-Origin", "*" },
+                    { "Access-Control-Allow-Origin", "https://insightify.yaredmekonnendomain.click" },
                     { "Access-Control-Allow-Methods", "POST,GET,OPTIONS" },
                     { "Access-Control-Allow-Headers", "Content-Type,Authorization" }
                 }
@@ -64,8 +64,6 @@ public class Function
             }
 
             var jobId = Guid.NewGuid().ToString();
-
-            // Correct way to get a reference to the table with the Document Model
             var table = Table.LoadTable(_dynamoDbClient, _tableName);
 
             var item = new Document
@@ -98,7 +96,7 @@ public class Function
             Body = body,
             Headers = new Dictionary<string, string> {
                 { "Content-Type", "application/json" },
-                { "Access-Control-Allow-Origin", "*" }
+                { "Access-Control-Allow-Origin", "https://insightify.yaredmekonnendomain.click" }
             }
         };
     }

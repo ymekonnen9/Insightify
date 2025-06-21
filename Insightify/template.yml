@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Insightify App: The complete serverless application stack with a dedicated Lambda for CORS preflight requests.
+  Insightify App: The complete serverless application stack with correct BasePath mapping for the custom domain.
 
 Globals:
   Function:
-    Timeout: 30 
+    Timeout: 30
     MemorySize: 128
 
 Resources:
@@ -13,44 +13,19 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: v1
-      # ALL global CORS configuration is removed. We are handling it manually.
+      # The global CORS configuration. The BasePath mapping will ensure this applies correctly.
+      Cors:
+        AllowOrigin: "'*'" # Use '*' for testing, then lock to your domain.
+        AllowMethods: "'OPTIONS,GET,POST'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
       Domain:
-        DomainName: insightify.yaredmekonnendomain.click
-        CertificateArn: arn:aws:acm:us-east-1:832753618852:certificate/be8c446d-4f36-4847-91f7-3471fb8bae79
+        DomainName: api.insightify.yaredmekonnendomain.click
+        BasePath: 'v1' # YOUR KEY DISCOVERY! This maps the custom domain to the /v1 stage.
+        CertificateArn: arn:aws:acm:us-east-1:832753618852:certificate/db310121-6838-4156-96cb-a06c5d76f94c
         EndpointConfiguration: REGIONAL
         Route53:
           HostedZoneId: Z02492692BM7HFE9JW03Y
 
-  #==================================================================
-  # 1. DEDICATED CORS HANDLER LAMBDA
-  #    This function now defines its own events to handle all preflight checks.
-  #==================================================================
-  CorsHandlerLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: Insightify.CorsHandler::Insightify.CorsHandler.Function::FunctionHandler
-      Runtime: dotnet8
-      CodeUri: Insightify.CorsHandler/
-      Policies:
-        - AWSLambdaBasicExecutionRole
-      Events:
-        SubmitOptionsEvent:
-          Type: Api
-          Properties:
-            Path: /analysis
-            Method: options
-            RestApiId: !Ref AnalysisApi
-        GetStatusOptionsEvent:
-          Type: Api
-          Properties:
-            Path: /analysis/{jobId}
-            Method: options
-            RestApiId: !Ref AnalysisApi
-
-  #==================================================================
-  # 2. SUBMIT LAMBDA
-  #    This function now ONLY handles the POST request.
-  #==================================================================
   SubmitLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -66,50 +41,41 @@ Resources:
         - DynamoDBCrudPolicy: { TableName: !Ref AnalysisTable }
         - SQSSendMessagePolicy: { QueueName: !GetAtt AnalysisQueue.QueueName }
       Events:
-        PostEvent:
+        ApiEvent:
           Type: Api
           Properties:
-            Path: /analysis
-            Method: post
             RestApiId: !Ref AnalysisApi
+            Path: /analysis
+            Method: ANY # ANY is a robust fallback for CORS.
 
-  #==================================================================
-  # 3. GET STATUS LAMBDA
-  #    This function now ONLY handles the GET request.
-  #==================================================================
   GetStatusLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: Insightify.GetStatus::Insightify.GetStatus.Function::FunctionHandler
       Runtime: dotnet8
       CodeUri: Insightify.GetStatus/
-      Environment: { Variables: { ANALYSIS_TABLE_NAME: !Ref AnalysisTable } }
+      Environment:
+        Variables:
+          ANALYSIS_TABLE_NAME: !Ref AnalysisTable
       Policies:
         - AWSLambdaBasicExecutionRole
         - DynamoDBReadPolicy: { TableName: !Ref AnalysisTable }
       Events:
-        GetEvent:
+        ApiEvent:
           Type: Api
           Properties:
-            Path: /analysis/{jobId}
-            Method: get
             RestApiId: !Ref AnalysisApi
-  
-  #==================================================================
-  # 4. OTHER RESOURCES (Unchanged)
-  #==================================================================
+            Path: /analysis/{jobId}
+            Method: ANY # ANY is a robust fallback for CORS.
+
   AnalysisQueue:
     Type: AWS::SQS::Queue
 
   AnalysisTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      AttributeDefinitions:
-        - AttributeName: JobId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: JobId
-          KeyType: HASH
+      AttributeDefinitions: [{AttributeName: JobId, AttributeType: S}]
+      KeySchema: [{AttributeName: JobId, KeyType: HASH}]
       BillingMode: PAY_PER_REQUEST
 
   ProcessLambdaFunction:
@@ -120,10 +86,10 @@ Resources:
       CodeUri: Insightify.Process/
       MemorySize: 256
       Environment: { Variables: { ANALYSIS_TABLE_NAME: !Ref AnalysisTable } }
-      Events:
-        SQSEvent: { Type: SQS, Properties: { Queue: !GetAtt AnalysisQueue.Arn, BatchSize: 5 } }
       Policies:
         - AWSLambdaBasicExecutionRole
         - SQSPollerPolicy: { QueueName: !GetAtt AnalysisQueue.QueueName }
         - DynamoDBCrudPolicy: { TableName: !Ref AnalysisTable }
         - ComprehendBasicAccessPolicy: {}
+      Events:
+        SQSEvent: { Type: SQS, Properties: { Queue: !GetAtt AnalysisQueue.Arn, BatchSize: 5 } }
