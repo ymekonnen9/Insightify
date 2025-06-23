@@ -2,8 +2,6 @@
 
 Insightify is a highly scalable, event-driven **serverless** application built on **AWS** and **.NET 8**. It performs Natural Language Processing (NLP) on user-submitted text, detecting sentiment and key entities. The decoupled architecture ensures resilience and asynchronous processing for a seamless user experience.
 
-**Live demo:** <https://insightify.yaredmekonnendomain.click> 
-
 ---
 
 ## Key Features
