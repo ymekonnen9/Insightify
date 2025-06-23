@@ -1,73 +1,75 @@
-Insightify: Serverless NLP Analysis Pipeline
+# Insightify: Serverless NLP Analysis Pipeline
 
+[cite_start]Insightify is a highly scalable, event-driven **serverless** application built on **AWS** and **.NET 8**. [cite_start]It performs Natural Language Processing (NLP) on user-submitted text, detecting sentiment and key entities. [cite_start]The decoupled architecture ensures resilience and asynchronous processing for a seamless user experience.
 
+[cite_start]**Live demo:** <https://insightify.yaredmekonnendomain.click> 
 
-Insightify is a highly scalable, event-driven serverless application built on AWS and .NET 8. It performs Natural Language Processing (NLP) analysis on user-submitted text, detecting sentiment and key entities. The decoupled architecture ensures resilience and asynchronous processing for a seamless user experience.
+---
 
-Live Demo: https://insightify.yaredmekonnendomain.click
+## Key Features
 
-Key Features
-Asynchronous NLP Processing: Jobs are submitted and processed asynchronously, allowing the system to handle long-running analysis tasks without blocking the user. 
-Sentiment & Entity Detection: Leverages Amazon Comprehend to perform sophisticated sentiment analysis and entity recognition on text. 
-Secure & Scalable API: Exposes a secure REST API through Amazon API Gateway for submitting jobs and retrieving results. 
-Low-Latency Status Tracking: Utilizes DynamoDB to store and retrieve job status and NLP results with minimal latency. 
-Infrastructure as Code (IaC): The entire cloud infrastructure, including over 20 unique resources, is version-controlled and automated using AWS SAM.
-Custom Domain & HTTPS: The frontend is hosted on S3 and delivered globally via CloudFront with a custom domain configured through Route 53 and ACM for security. 
-Architecture
-Insightify is architected as an event-driven, serverless application on AWS to ensure scalability and cost-efficiency. 
+-   [cite_start]**Asynchronous NLP Processing** – Jobs are submitted and processed asynchronously, so long-running analysis never blocks the user.
+-   [cite_start]**Sentiment & Entity Detection** – Uses Amazon Comprehend for sophisticated sentiment analysis and entity recognition.
+-   [cite_start]**Secure & Scalable API** – REST endpoints exposed through Amazon API Gateway for submitting jobs and retrieving results.
+-   [cite_start]**Low-Latency Status Tracking** – DynamoDB stores job status and NLP results with minimal latency.
+-   **Infrastructure as Code** – 20+ AWS resources version-controlled and automated with AWS SAM.
+-   [cite_start]**Custom Domain & HTTPS** – Static frontend on S3, delivered via CloudFront, secured by ACM and managed with Route 53.
 
-The workflow is as follows:
+---
 
-A user submits text through the static frontend hosted on Amazon S3 and delivered by CloudFront.
-The request hits a secure API Gateway endpoint, which triggers a "Submit" AWS Lambda function.
-The "Submit" Lambda places the job details onto an SQS queue for reliable, decoupled processing and immediately returns a job ID to the user. 
-A "Process" AWS Lambda function is triggered by messages appearing in the SQS queue. 
-This "Process" function calls the Amazon Comprehend service to perform the core sentiment and entity analysis. 
-Once the analysis is complete, the results and job status are stored in a DynamoDB table for fast, persistent storage and retrieval. 
-You can create a simple diagram using a tool like diagrams.net and link it here.
+## Architecture
 
-Technology Stack
-Backend
-Runtime: C# / .NET 8
-Framework: ASP.NET Core for Lambda
-Concepts: RESTful APIs, Clean Architecture, Event-Driven Design
-Cloud & DevOps
-Compute: AWS Lambda 
-Messaging: AWS SQS (Simple Queue Service) 
-Database: Amazon DynamoDB 
-API: Amazon API Gateway 
-NLP Service: Amazon Comprehend 
-Storage & Hosting: Amazon S3 
-CDN: Amazon CloudFront 
-DNS & Security: Amazon Route 53, AWS Certificate Manager (ACM) 
-IaC: AWS SAM (Serverless Application Model)
-Frontend
-Hosting: Static site hosted on Amazon S3 
-Setup and Deployment
-The entire infrastructure for this project is defined in an AWS SAM template.yaml file.
+[cite_start]Insightify follows an event-driven, serverless design for maximum scalability and cost efficiency:
 
-To deploy this stack:
+1.  [cite_start]A user submits text through the static site on Amazon S3 (served via CloudFront).
+2.  [cite_start]The request hits a secure API Gateway endpoint that invokes the **Submit** Lambda.
+3.  [cite_start]**Submit** enqueues the job on **Amazon SQS** and immediately returns a `jobId`.
+4.  [cite_start]The **Process** Lambda is triggered by SQS, calls **Amazon Comprehend** for analysis, then writes results and status to **DynamoDB**.
+5.  Clients poll `GET /jobs/{jobId}` to retrieve results.
 
-Prerequisites:
+*Tip: create a simple diagram in diagrams.net and link it here.*
 
-An AWS Account
-AWS CLI installed and configured
-AWS SAM CLI installed
-.NET 8 SDK
-Clone the repository:
+---
 
-Bash
+## Technology Stack
 
-git clone https://github.com/ymekonnen9/Insightify.git
-cd Insightify
-Build the SAM application:
+### Backend
+-   [cite_start]**Runtime:** C# / .NET 8 
+-   [cite_start]**Framework:** ASP.NET Core for Lambda 
+-   [cite_start]**Concepts:** RESTful APIs [cite: 4][cite_start], Event-Driven Design 
 
-Bash
+### Cloud & DevOps
+-   [cite_start]**Compute:** AWS Lambda 
+-   [cite_start]**Messaging:** Amazon SQS 
+-   [cite_start]**Database:** Amazon DynamoDB 
+-   [cite_start]**API:** Amazon API Gateway 
+-   [cite_start]**NLP:** Amazon Comprehend 
+-   [cite_start]**Storage & Hosting:** Amazon S3 
+-   [cite_start]**CDN:** Amazon CloudFront 
+-   [cite_start]**DNS & TLS:** Amazon Route 53, AWS Certificate Manager 
+-   **IaC:** AWS SAM (Serverless Application Model)
 
+### Frontend
+-   [cite_start]Static site hosted on Amazon S3 
+
+---
+
+## Setup & Deployment
+
+The entire stack is defined in **`template.yaml`** (AWS SAM).
+
+### Prerequisites
+
+-   AWS account
+-   **AWS CLI** configured
+-   **AWS SAM CLI** installed
+-   [cite_start]**.NET 8 SDK** 
+
+### Clone
+
+```bash
+git clone [https://github.com/ymekonnen9/Insightify.git](https://github.com/ymekonnen9/Insightify.git)
+```bash
 sam build
-Deploy to AWS:
-
-Bash
-
+```bash
 sam deploy --guided
-Follow the on-screen prompts to deploy the serverless application to your AWS account. The SAM CLI will provision all the necessary resources as defined in the template.
